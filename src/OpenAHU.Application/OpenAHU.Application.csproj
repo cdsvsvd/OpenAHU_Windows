@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>OpenAHU.Application</RootNamespace>
+    <AssemblyName>OpenAHU.Application</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>false</IsPackable>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <!--
+    契约边界（04 号维护）：
+    1. 本类库对 **Contracts 零引用**（INTERFACE_PLAN.md 先决问题 A 采方案 A）：
+       业务层只返回自己的只读模型，形状映射由 03 号在 Api 层完成。
+    2. 不引用 EF Core / Microsoft.Data.Sqlite / ASP.NET Core / WPF。
+       数据库访问一律经 Abstractions/ 下的仓储接口，由 05 号 Infrastructure 实现。
+    3. 不引入任何 NuGet 包：与 Contracts / Api 保持一致（团队暂无离线还原能力）。
+       因此本层不提供 AddApplication() 扩展方法，DI 注册写在 Api 的 Composition Root
+       （符合 02_统一规范/01_架构 §2「通过 DI 在 Api Composition Root 注册」），清单见 README。
+    4. TreatWarningsAsErrors 未开：与既有工程一致，严格化由 06 号在 CI 中统一开启。
+  -->
+
+  <!--
+    业务单元测试需要直接测内部的 CourseWriteValidator / WeekNumberNormalizer。
+    用内部可见性而不是把它们公开，避免业务实现细节进入 03 号可依赖的公共契约。
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="OpenAHU.Application.Tests" />
+  </ItemGroup>
+
+</Project>
