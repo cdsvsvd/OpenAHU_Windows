@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../OpenAHU.Application/OpenAHU.Application.csproj" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Verification/**/*.cs" />
+    <EmbeddedResource Remove="Verification/**/*" />
+    <None Remove="Verification/**/*" />
+    <Compile Remove="Tools/**/*.cs" />
+    <EmbeddedResource Remove="Tools/**/*" />
+    <None Remove="Tools/**/*" />
+  </ItemGroup>
+</Project>
