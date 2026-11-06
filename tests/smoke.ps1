@@ -74,7 +74,20 @@ try {
     Invoke-RestMethod "$base/local/courses/$id" -Method DELETE -Headers $h | Out-Null
     $coursesAfterDelete = Invoke-RestMethod "$base/courses?termId=term-2026-fall" -Headers $h
     Assert (($coursesAfterDelete | Where-Object id -eq $id).Count -eq 0) 'course delete failed'
-    Write-Host 'PASS: health / session 401 / term 400&404 / read / CRUD / restart persistence'
+    # Member 05 safety regression: unmanaged SQLite files must not be adopted or overwritten.
+    Stop-Api
+    $unmanaged = Join-Path $tmp 'unmanaged.db'
+    & python -c 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); db.execute("CREATE TABLE user_notes (id INTEGER PRIMARY KEY,note TEXT NOT NULL)"); db.execute("INSERT INTO user_notes(note) VALUES (?)",("keep-this-row",)); db.commit(); db.close()' $unmanaged
+    Assert ($LASTEXITCODE -eq 0) 'could not create unmanaged database for smoke test'
+    $env:OpenAHU__DatabasePath = $unmanaged
+    $s = Start-Api
+    $h = @{ 'X-OpenAHU-Session' = $s.token }; $base = $s.baseUrl + '/api/v1'
+    $unsafeHealth = Invoke-RestMethod "$base/health" -Headers $h
+    Assert (($unsafeHealth.status -eq 'degraded') -and (-not $unsafeHealth.databaseReady)) 'unmanaged database incorrectly reported ready'
+    Stop-Api
+    & python -c 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); assert db.execute("SELECT note FROM user_notes").fetchone()==("keep-this-row",); assert db.execute("SELECT name FROM sqlite_master WHERE name=?",("__EFMigrationsHistory",)).fetchone() is None; db.close()' $unmanaged
+    Assert ($LASTEXITCODE -eq 0) 'unmanaged database was modified'
+    Write-Host 'PASS: health / session 401 / term 400&404 / read / CRUD / restart persistence / unmanaged database preservation'
 }
 catch {
     Write-Host ("Smoke test failure: " + $_.Exception.Message)
