@@ -84,6 +84,7 @@ try {
     $h = @{ 'X-OpenAHU-Session' = $s.token }; $base = $s.baseUrl + '/api/v1'
     $unsafeHealth = Invoke-RestMethod "$base/health" -Headers $h
     Assert (($unsafeHealth.status -eq 'degraded') -and (-not $unsafeHealth.databaseReady)) 'unmanaged database incorrectly reported ready'
+    ExpectStatus "$base/terms" $h 503
     Stop-Api
     & python -c 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); assert db.execute("SELECT note FROM user_notes").fetchone()==("keep-this-row",); assert db.execute("SELECT name FROM sqlite_master WHERE name=?",("__EFMigrationsHistory",)).fetchone() is None; db.close()' $unmanaged
     Assert ($LASTEXITCODE -eq 0) 'unmanaged database was modified'

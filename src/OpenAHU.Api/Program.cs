@@ -30,6 +30,21 @@ using var lease=SingleInstanceLease.Acquire(handshakePath);
 var app=builder.Build();
 app.UseExceptionHandler();
 app.UseMiddleware<SessionTokenMiddleware>();
+app.Use(async (context, next) =>
+{
+    var requestPath = context.Request.Path.Value ?? "";
+    if (!databaseStartupState.IsReady &&
+        requestPath.StartsWith("/api/v1/", StringComparison.OrdinalIgnoreCase) &&
+        !requestPath.Equals("/api/v1/health", StringComparison.OrdinalIgnoreCase) &&
+        !requestPath.Equals("/api/v1/data-status", StringComparison.OrdinalIgnoreCase))
+    {
+        await ApiResults.WriteAsync(context, StatusCodes.Status503ServiceUnavailable,
+            ApiErrorCodes.DbUnavailable, "数据库初始化未通过，业务接口暂不可用。",
+            context.RequestAborted);
+        return;
+    }
+    await next(context);
+});
 app.UseStatusCodePages(async ctx => {
     var h=ctx.HttpContext;
     if(h.Request.Path.StartsWithSegments("/api",StringComparison.OrdinalIgnoreCase))
