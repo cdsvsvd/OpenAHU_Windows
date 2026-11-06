@@ -8,7 +8,14 @@ public static class DemoDatabaseInitializer
     public static async Task InitializeAsync(CampusDbContext db, CancellationToken ct)
     {
         await db.Database.MigrateAsync(ct);
-        if (await db.Students.AnyAsync(ct)) return;
+        // Do not restore deliberately deleted demo records or overwrite partly filled databases.
+        // The marker and the demo records are written in the same transaction below.
+        if (await db.AppSettings.AnyAsync(x => x.SettingKey == "demo_seed_version", ct)) return;
+        if (await db.Students.AnyAsync(ct) || await db.Terms.AnyAsync(ct) ||
+            await db.Courses.AnyAsync(ct) || await db.CourseWeeks.AnyAsync(ct) ||
+            await db.Enrollments.AnyAsync(ct) || await db.Grades.AnyAsync(ct) ||
+            await db.Exams.AnyAsync(ct) || await db.CampusLinks.AnyAsync(ct) ||
+            await db.AppSettings.AnyAsync(ct)) return;
         await using var tx=await db.Database.BeginTransactionAsync(ct);
         db.Students.AddRange(
             new Student {Id="demo-001",DisplayName="演示学生甲",StudentNumber="DEMO001",College="示例学院",Major="示例专业",GradeYear=2024,CreatedAtUtc="2026-11-02T00:00:00Z"},
@@ -45,7 +52,8 @@ public static class DemoDatabaseInitializer
         db.AppSettings.AddRange(
             new AppSetting {SettingKey="active_demo_student_id",SettingValue="demo-001"},
             new AppSetting {SettingKey="source",SettingValue="LocalSQLiteDemo"},
-            new AppSetting {SettingKey="source_label",SettingValue="本地演示数据，非学校官方信息"});
+            new AppSetting {SettingKey="source_label",SettingValue="本地演示数据，非学校官方信息"},
+            new AppSetting {SettingKey="demo_seed_version",SettingValue="v1"});
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
     }

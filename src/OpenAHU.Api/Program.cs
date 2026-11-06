@@ -18,6 +18,8 @@ builder.Services.ConfigureHttpJsonOptions(o => {
 });
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+var databaseStartupState = new DatabaseStartupState();
+builder.Services.AddSingleton(databaseStartupState);
 var sessionToken=SessionToken.Create();
 builder.Services.AddSingleton(sessionToken);
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
@@ -45,7 +47,10 @@ try
 {
     using var scope=app.Services.CreateScope();
     var db=scope.ServiceProvider.GetRequiredService<CampusDbContext>();
+    await DatabaseCompatibilityGuard.AssertCompatibleAsync(
+        db, InfrastructureOptions.DatabasePath(app.Configuration), CancellationToken.None);
     await DemoDatabaseInitializer.InitializeAsync(db,CancellationToken.None);
+    databaseStartupState.IsReady = true;
     app.Logger.LogInformation("本地SQLite已完成首次迁移与演示资料检查。");
 }
 catch(Exception e)

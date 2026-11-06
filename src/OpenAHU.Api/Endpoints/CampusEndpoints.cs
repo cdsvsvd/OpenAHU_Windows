@@ -1,5 +1,6 @@
 using System.Text.Json;
 using OpenAHU.Api.Errors;
+using OpenAHU.Infrastructure;
 using OpenAHU.Application;
 using OpenAHU.Contracts.Dtos;
 using OpenAHU.Contracts.Errors;
@@ -17,9 +18,9 @@ public static class CampusEndpoints
     public static IEndpointRouteBuilder MapCampusEndpoints(this IEndpointRouteBuilder endpoints)
     {
         var group=endpoints.MapGroup("/api/v1");
-        group.MapGet("/health",async (ICampusRepository repo,HttpContext context) =>
+        group.MapGet("/health",async (ICampusRepository repo,DatabaseStartupState startup,HttpContext context) =>
         {
-            var ready=await repo.IsReadyAsync(context.RequestAborted);
+            var ready=startup.IsReady && await repo.IsReadyAsync(context.RequestAborted);
             return Results.Ok(new HealthDto(ready?"ok":"degraded",ready,ApiVersion));
         });
         group.MapGet("/data-status",()=>Results.Ok(new DataStatusDto(
