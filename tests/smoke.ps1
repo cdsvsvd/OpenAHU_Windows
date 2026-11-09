@@ -91,7 +91,9 @@ try {
     Stop-Api
     # Invalid active student must not report a healthy database.
     $invalidActive = Join-Path $tmp 'invalid-active.db'
-    Copy-Item (Join-Path $tmp 'campus.db') $invalidActive
+    # SQLite may use WAL; plain Copy-Item can silently omit committed WAL pages.
+    & python -c 'import sqlite3,sys; src=sqlite3.connect(sys.argv[1]); dst=sqlite3.connect(sys.argv[2]); src.backup(dst); dst.close(); src.close()' (Join-Path $tmp 'campus.db') $invalidActive
+    Assert ($LASTEXITCODE -eq 0) 'SQLite consistent backup failed'
     & python -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("UPDATE app_settings SET setting_value=? WHERE setting_key=?",("ghost-student","active_demo_student_id")); c.commit(); c.close()' $invalidActive
     Assert ($LASTEXITCODE -eq 0) 'could not prepare invalid active student'
     $env:OpenAHU__DatabasePath = $invalidActive
@@ -102,7 +104,8 @@ try {
     Stop-Api
     # A schema with a broken foreign key must not be opened/migrated.
     $invalidFk = Join-Path $tmp 'invalid-fk.db'
-    Copy-Item (Join-Path $tmp 'campus.db') $invalidFk
+    & python -c 'import sqlite3,sys; src=sqlite3.connect(sys.argv[1]); dst=sqlite3.connect(sys.argv[2]); src.backup(dst); dst.close(); src.close()' (Join-Path $tmp 'campus.db') $invalidFk
+    Assert ($LASTEXITCODE -eq 0) 'SQLite foreign-key fixture backup failed'
     & python -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("PRAGMA foreign_keys=OFF"); c.execute("INSERT INTO course_weeks(course_id,week_number) VALUES (?,?)",("missing-course",1)); c.commit(); c.close()' $invalidFk
     Assert ($LASTEXITCODE -eq 0) 'could not prepare invalid foreign key fixture'
     $env:OpenAHU__DatabasePath = $invalidFk
