@@ -119,19 +119,23 @@ public sealed class CampusRepository : ICampusRepository
     private async Task EnsureNoScheduleOverlapAsync(string sid,string? exceptId,CourseUpsertRequest r,CancellationToken ct)
     {
         var dbDay=r.DayOfWeek==DayOfWeek.Sunday?7:(int)r.DayOfWeek;
-        var candidates=await _db.Courses.Include(x=>x.Weeks)
+        var candidates=await _db.Courses.AsNoTracking().Include(x=>x.Weeks)
             .Where(x=>x.TermId==r.TermId && x.DayOfWeek==dbDay && x.Id!=exceptId &&
                 x.StartSection<=r.EndSection && x.EndSection>=r.StartSection &&
                 x.Enrollments.Any(e=>e.StudentId==sid)).ToListAsync(ct);
-        if (candidates.Any(x=>x.Weeks.Any(w=>r.WeekNumbers.Contains(w.WeekNumber))))
-            throw Error(CampusErrorKind.Conflict, "所选时段与已有课程存在上课周次冲突。");
+        var overlapping=candidates.FirstOrDefault(x=>x.Weeks.Any(w=>r.WeekNumbers.Contains(w.WeekNumber)));
+        if (overlapping is not null)
+            throw Error(CampusErrorKind.Conflict,
+                $"与《{overlapping.Name}》存在星期、节次及上课周次冲突，请调整课程时间或周次。");
     }
 
     public Task<CourseDto> CreateCourseAsync(CourseUpsertRequest r,CancellationToken ct) => Guard(async () =>
     {
         var sid=await ActiveStudentAsync(ct);
-        await EnsureNoScheduleOverlapAsync(sid,null,r,ct);
+        // Acquire the SQLite write transaction BEFORE reading other courses. Concurrent
+        // requests must not both pass an obsolete schedule-conflict check.
         await using var trx=await _db.Database.BeginTransactionAsync(ct);
+        await EnsureNoScheduleOverlapAsync(sid,null,r,ct);
         var course=new Course {
             Id="local-"+Guid.NewGuid().ToString("N"),TermId=r.TermId,Name=r.Name.Trim(),
             Teacher=r.Teacher.Trim(),Location=r.Location.Trim(),
@@ -162,12 +166,14 @@ public sealed class CampusRepository : ICampusRepository
     public Task<CourseDto> UpdateCourseAsync(string id,CourseUpsertRequest r,CancellationToken ct) => Guard(async () =>
     {
         var sid=await ActiveStudentAsync(ct);
+        // Keep course ownership, grade/exam protection, overlap check and week replacement
+        // inside one transaction so another writer cannot invalidate our preconditions.
+        await using var trx=await _db.Database.BeginTransactionAsync(ct);
         var c=await RequireOwnCourseAsync(sid,id,ct);
         if (c.TermId!=r.TermId && (await _db.Grades.AnyAsync(g=>g.CourseId==id,ct) ||
                                       await _db.Exams.AnyAsync(e=>e.CourseId==id,ct)))
             throw Error(CampusErrorKind.Conflict,"该课程已有成绩或考试，不能更换学期。");
         await EnsureNoScheduleOverlapAsync(sid,id,r,ct);
-        await using var trx=await _db.Database.BeginTransactionAsync(ct);
         c.TermId=r.TermId;c.Name=r.Name.Trim();c.Teacher=r.Teacher.Trim();c.Location=r.Location.Trim();
         c.DayOfWeek=r.DayOfWeek==DayOfWeek.Sunday?7:(int)r.DayOfWeek;
         c.StartSection=r.StartSection;c.EndSection=r.EndSection;

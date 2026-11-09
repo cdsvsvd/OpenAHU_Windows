@@ -37,6 +37,23 @@ function ExpectStatus($url,$headers,[int]$expect,[string]$method='GET') {
         Assert ($status -eq $expect) "Expected HTTP $expect, got $status"
     }
 }
+function ExpectCourseRejection($url,$headers,$draft,[int]$expectedStatus,[string]$expectedCode,[string]$field='') {
+    $body=$draft | ConvertTo-Json -Depth 6 -Compress
+    try {
+        Invoke-RestMethod $url -Method POST -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body)) | Out-Null
+        throw "Expected HTTP $expectedStatus for rejected course"
+    }
+    catch {
+        if(-not $_.Exception.Response) { throw }
+        $status=[int]$_.Exception.Response.StatusCode
+        Assert ($status -eq $expectedStatus) "Expected HTTP $expectedStatus, got $status"
+        $details=$_.ErrorDetails.Message
+        Assert (-not [string]::IsNullOrWhiteSpace($details)) 'Error response did not include JSON body'
+        $errorBody=$details | ConvertFrom-Json
+        Assert ($errorBody.code -eq $expectedCode) "Expected error code $expectedCode, got $($errorBody.code)"
+        if($field) { Assert ($errorBody.message -match [regex]::Escape($field)) "Expected error message to reference field $field" }
+    }
+}
 try {
     Write-Host 'Restoring and building (.NET 10 SDK required)...'
     dotnet restore $api; Assert ($LASTEXITCODE -eq 0) 'restore failed'
@@ -57,10 +74,33 @@ try {
     Assert ($coursesBefore.Count -ge 3) 'demo courses not returned'
     $grades = Invoke-RestMethod "$base/grades?termId=term-2026-fall" -Headers $h
     Assert ($grades.Count -ge 3) 'demo grades not returned'
-    $payload = @{ name='自动化测试课程';teacher='测试教师';location='测试楼';dayOfWeek=5;
+    # Member04 regression matrix: bad fields, nonexistent term, time clash; no record
+    # should be persisted by any of these rejected POST requests.
+    $newCourse = @{ name='表单检验';teacher='';location='';dayOfWeek=5;
+        startSection=7;endSection=8;weekNumbers=@(1,3,5);termId='term-2026-fall' }
+    $badName=$newCourse.Clone();$badName.name='   '
+    ExpectCourseRejection "$base/local/courses" $h $badName 400 'invalid_request' 'name'
+    $badTeacher=$newCourse.Clone();$badTeacher.teacher=('师'*101)
+    ExpectCourseRejection "$base/local/courses" $h $badTeacher 400 'invalid_request' 'teacher'
+    $badDay=$newCourse.Clone();$badDay.dayOfWeek=8
+    ExpectCourseRejection "$base/local/courses" $h $badDay 400 'invalid_request' 'dayOfWeek'
+    $badSections=$newCourse.Clone();$badSections.endSection=6
+    ExpectCourseRejection "$base/local/courses" $h $badSections 400 'invalid_request' 'endSection'
+    $duplicateWeeks=$newCourse.Clone();$duplicateWeeks.weekNumbers=@(1,1)
+    ExpectCourseRejection "$base/local/courses" $h $duplicateWeeks 400 'invalid_request' 'weekNumbers'
+    $outOfRangeWeeks=$newCourse.Clone();$outOfRangeWeeks.weekNumbers=@(1,19)
+    ExpectCourseRejection "$base/local/courses" $h $outOfRangeWeeks 400 'invalid_request' 'weekNumbers'
+    $badTerm=$newCourse.Clone();$badTerm.termId='term-not-found'
+    ExpectCourseRejection "$base/local/courses" $h $badTerm 404 'not_found'
+    $clash=$newCourse.Clone();$clash.dayOfWeek=1;$clash.startSection=1;$clash.endSection=2
+    ExpectCourseRejection "$base/local/courses" $h $clash 409 'conflict'
+    $coursesUnchanged=Invoke-RestMethod "$base/courses?termId=term-2026-fall" -Headers $h
+    Assert ($coursesUnchanged.Count -eq $coursesBefore.Count) 'Rejected course unexpectedly changed the schedule'
+    $payload = @{ name='  自动化测试课程  ';teacher='测试教师';location='测试楼';dayOfWeek=5;
         startSection=7;endSection=8;weekNumbers=@(1,3,5);termId='term-2026-fall' } | ConvertTo-Json -Depth 5 -Compress
     $created = Invoke-RestMethod "$base/local/courses" -Method POST -Headers $h -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes($payload))
     Assert ($created.id -like 'local-*') 'course was not created'
+    Assert ($created.name -eq '自动化测试课程') 'trimmed name was not normalized'
     $id = $created.id
     Stop-Api
     $s = Start-Api
@@ -128,7 +168,7 @@ try {
     Stop-Api
     & python -c 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); assert db.execute("SELECT note FROM user_notes").fetchone()==("keep-this-row",); assert db.execute("SELECT name FROM sqlite_master WHERE name=?",("__EFMigrationsHistory",)).fetchone() is None; db.close()' $unmanaged
     Assert ($LASTEXITCODE -eq 0) 'unmanaged database was modified'
-    Write-Host 'PASS: health / session 401 / term 400&404 / read / repeat update / CRUD / persistence / orphaned user / foreign key / unmanaged database'
+    Write-Host 'PASS: health / session 401 / validation 400&404&409 / read / repeat update / CRUD / persistence / orphaned user / foreign key / unmanaged database'
 }
 catch {
     Write-Host ("Smoke test failure: " + $_.Exception.Message)

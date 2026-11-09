@@ -44,18 +44,12 @@ public sealed class CampusService : ICampusService
     {
         if (r is null)
             throw new CampusException(CampusErrorKind.InvalidRequest, "请求体不能为空。");
-        if (string.IsNullOrWhiteSpace(r.Name) || r.Name.Length > 120 ||
-            r.Teacher is null || r.Teacher.Length > 100 ||
-            r.Location is null || r.Location.Length > 150)
-            throw new CampusException(CampusErrorKind.InvalidRequest, "课程名称、教师或地点不符合长度要求。");
-        if ((int)r.DayOfWeek < 0 || (int)r.DayOfWeek > 6 ||
-            r.StartSection < 1 || r.EndSection > 20 || r.StartSection > r.EndSection)
-            throw new CampusException(CampusErrorKind.InvalidRequest, "星期或课程节次无效。");
+
+        // This pure validator preserves the frozen DTO and API error shape, but provides
+        // actionable field names so the Windows form can highlight invalid entries.
+        CourseWriteValidator.ValidateFields(r);
         var term = await RequireTermAsync(r.TermId, ct);
-        if (r.WeekNumbers is null || r.WeekNumbers.Count == 0 || r.WeekNumbers.Count > 30 ||
-            r.WeekNumbers.Distinct().Count() != r.WeekNumbers.Count ||
-            r.WeekNumbers.Any(w => w < 1 || w > term.WeekCount))
-            throw new CampusException(CampusErrorKind.InvalidRequest, "上课周次应去重，且必须处于该学期教学周范围内。");
+        CourseWriteValidator.ValidateWeeks(r, term.WeekCount);
     }
 
     public async Task<CourseDto> CreateCourseAsync(CourseUpsertRequest request, CancellationToken ct)
