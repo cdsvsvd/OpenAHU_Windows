@@ -204,6 +204,18 @@ try {
     & python -c 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); assert db.execute("SELECT note FROM user_notes").fetchone()==("keep-this-row",); assert db.execute("SELECT name FROM sqlite_master WHERE name=?",("__EFMigrationsHistory",)).fetchone() is None; db.close()' $unmanaged
     Assert ($LASTEXITCODE -eq 0) 'unmanaged database was modified'
     Write-Host 'PASS: health / session / validation / unpublished grades / exam sorting / shared-course rejection / invalid dates / CRUD / persistence / DB guards'
+    Write-Host 'Building Windows WPF desktop shell and page verification executable...'
+    $desktopProject=Join-Path $root 'src\OpenAHU.Desktop\OpenAHU.Desktop.csproj'
+    $verificationProject=Join-Path $root 'src\OpenAHU.Desktop\Features\Verification\OpenAHU.Features.Verification.csproj'
+    dotnet restore $desktopProject; Assert ($LASTEXITCODE -eq 0) 'WPF desktop restore failed'
+    dotnet build $desktopProject -c Release --no-restore; Assert ($LASTEXITCODE -eq 0) 'WPF desktop build failed'
+    dotnet restore $verificationProject; Assert ($LASTEXITCODE -eq 0) 'WPF verification restore failed'
+    dotnet build $verificationProject -c Release --no-restore; Assert ($LASTEXITCODE -eq 0) 'WPF verification build failed'
+    $verificationDll=Join-Path $root 'src\OpenAHU.Desktop\Features\Verification\bin\Release\net10.0-windows\OpenAHU.Features.Verification.dll'
+    dotnet $verificationDll
+    Assert ($LASTEXITCODE -eq 0) 'WPF page behavior assertions failed'
+    Write-Host 'PASS: WPF desktop compile, feature project compile and verification assertions'
+
 }
 catch {
     Write-Host ("Smoke test failure: " + $_.Exception.Message)

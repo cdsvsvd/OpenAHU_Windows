@@ -38,3 +38,13 @@ dotnet run --project .\src\OpenAHU.Api\OpenAHU.Api.csproj
 ## 团队衔接
 
 本补丁为解决未完成接口而提供了4号和5号层的**参考实现**，不代表替代同学最终的PR。合并前由4、5号对模型、迁移和数据兼容性复核，避免同时合并不同版本的同名类型。具体见 `docs/团队对接与变更说明.md`。
+
+
+## Windows客户端（成员1号+2号已接入）
+
+- **主工程**：`src/OpenAHU.Desktop/OpenAHU.Desktop.csproj`，WPF/.NET 10，包含导航Shell和六个业务页面。
+- **业务模块**：`src/OpenAHU.Desktop/Features/OpenAHU.Desktop.Features.csproj`，通过`OpenAHU.Contracts`和本机API访问课程、成绩、考试、校园链接、设置与首页。不会直接读取SQLite或登录智慧安大。
+- **统一解决方案**：`OpenAHU.slnx`，Windows+Visual Studio 2022（支持.NET10）或安装.NET 10 SDK后使用`dotnet build OpenAHU.slnx -c Release`。
+- **启动**：先执行`dotnet build src/OpenAHU.Api/OpenAHU.Api.csproj -c Release`，然后运行`dotnet run --project src/OpenAHU.Desktop/OpenAHU.Desktop.csproj -c Release`。桌面程序负责启动/复用本机API并读取私有握手文件。发布时需将API可执行文件一起部署。
+- **验收**：Windows CI的`tests/smoke.ps1`在后端测试通过后还会编译WPF前端并运行页面行为断言；人工主窗口、DPI、打包发布仍需6号同学验收。
+- **安全提醒**：目前全部业务数据为本地SQLite演示数据，不访问学校网站。仅新建的`local-*`课程可在客户端编辑，种子课程只读。
