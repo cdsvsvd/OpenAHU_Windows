@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultItems>false</EnableDefaultItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Common/**/*.cs;Services/**/*.cs;Home/**/*.cs;Timetable/**/*.cs;Grades/**/*.cs;Exams/**/*.cs;Links/**/*.cs;Settings/**/*.cs;FeatureCatalog.cs" />
+    <Page Include="Common/**/*.xaml;Home/**/*.xaml;Timetable/**/*.xaml;Grades/**/*.xaml;Exams/**/*.xaml;Links/**/*.xaml;Settings/**/*.xaml" />
+    <ProjectReference Include="../../OpenAHU.Contracts/OpenAHU.Contracts.csproj" />
+    <InternalsVisibleTo Include="OpenAHU.Features.Verification" />
+  </ItemGroup>
+</Project>

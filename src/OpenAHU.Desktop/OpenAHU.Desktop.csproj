@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <AssemblyName>OpenAHU.Desktop</AssemblyName>
+    <RootNamespace>OpenAHU.Desktop</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Platforms>AnyCPU</Platforms>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="App.xaml.cs;MainWindow.xaml.cs;Shell/**/*.cs" />
+    <ApplicationDefinition Include="App.xaml" />
+    <Page Include="MainWindow.xaml;Themes/**/*.xaml;Controls/**/*.xaml" />
+    <None Include="app.manifest" />
+    <ProjectReference Include="Features/OpenAHU.Desktop.Features.csproj" />
+  </ItemGroup>
+</Project>

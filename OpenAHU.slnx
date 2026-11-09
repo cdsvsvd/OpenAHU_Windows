@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="src/OpenAHU.Contracts/OpenAHU.Contracts.csproj" />
+  <Project Path="src/OpenAHU.Application/OpenAHU.Application.csproj" />
+  <Project Path="src/OpenAHU.Infrastructure/OpenAHU.Infrastructure.csproj" />
+  <Project Path="src/OpenAHU.Api/OpenAHU.Api.csproj" />
+  <Project Path="src/OpenAHU.Desktop/Features/OpenAHU.Desktop.Features.csproj" />
+  <Project Path="src/OpenAHU.Desktop/OpenAHU.Desktop.csproj" />
+  <Project Path="src/OpenAHU.Desktop/Features/Verification/OpenAHU.Features.Verification.csproj" />
+</Solution>

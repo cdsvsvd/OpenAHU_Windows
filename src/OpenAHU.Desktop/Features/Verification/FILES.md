@@ -1,0 +1,40 @@
+# 成员02变更文件清单
+
+以下均为新增文件；仅含 src/OpenAHU.Desktop/Features/ 职责目录。构建产物、SDK、运行库和截图位于 git 忽略目录，不列入源代码变更。
+
+- `src/OpenAHU.Desktop/Features/Common/Commands.cs`
+- `src/OpenAHU.Desktop/Features/Common/FeatureStyles.xaml`
+- `src/OpenAHU.Desktop/Features/Common/ObservableObject.cs`
+- `src/OpenAHU.Desktop/Features/Common/PageViewModel.cs`
+- `src/OpenAHU.Desktop/Features/Common/TermPageViewModel.cs`
+- `src/OpenAHU.Desktop/Features/Exams/ExamsView.xaml.cs`
+- `src/OpenAHU.Desktop/Features/Exams/ExamsView.xaml`
+- `src/OpenAHU.Desktop/Features/Exams/ExamsViewModel.cs`
+- `src/OpenAHU.Desktop/Features/FeatureCatalog.cs`
+- `src/OpenAHU.Desktop/Features/Grades/GradesView.xaml.cs`
+- `src/OpenAHU.Desktop/Features/Grades/GradesView.xaml`
+- `src/OpenAHU.Desktop/Features/Grades/GradesViewModel.cs`
+- `src/OpenAHU.Desktop/Features/Home/HomeView.xaml.cs`
+- `src/OpenAHU.Desktop/Features/Home/HomeView.xaml`
+- `src/OpenAHU.Desktop/Features/Home/HomeViewModel.cs`
+- `src/OpenAHU.Desktop/Features/Links/LinksView.xaml.cs`
+- `src/OpenAHU.Desktop/Features/Links/LinksView.xaml`
+- `src/OpenAHU.Desktop/Features/Links/LinksViewModel.cs`
+- `src/OpenAHU.Desktop/Features/OpenAHU.Desktop.Features.csproj`
+- `src/OpenAHU.Desktop/Features/README.md`
+- `src/OpenAHU.Desktop/Features/Services/IFeatureApi.cs`
+- `src/OpenAHU.Desktop/Features/Services/SessionApiClient.cs`
+- `src/OpenAHU.Desktop/Features/Settings/SettingsView.xaml.cs`
+- `src/OpenAHU.Desktop/Features/Settings/SettingsView.xaml`
+- `src/OpenAHU.Desktop/Features/Settings/SettingsViewModel.cs`
+- `src/OpenAHU.Desktop/Features/Timetable/CourseEditorViewModel.cs`
+- `src/OpenAHU.Desktop/Features/Timetable/TimetableView.xaml.cs`
+- `src/OpenAHU.Desktop/Features/Timetable/TimetableView.xaml`
+- `src/OpenAHU.Desktop/Features/Timetable/TimetableViewModel.cs`
+- `src/OpenAHU.Desktop/Features/Verification/BehaviorChecks.cs`
+- `src/OpenAHU.Desktop/Features/Verification/FILES.md`
+- `src/OpenAHU.Desktop/Features/Verification/IntegrationChecks.cs`
+- `src/OpenAHU.Desktop/Features/Verification/OpenAHU.Features.Verification.csproj`
+- `src/OpenAHU.Desktop/Features/Verification/Program.cs`
+- `src/OpenAHU.Desktop/Features/Verification/RESULTS.md`
+- `src/OpenAHU.Desktop/Features/Verification/verify.ps1`

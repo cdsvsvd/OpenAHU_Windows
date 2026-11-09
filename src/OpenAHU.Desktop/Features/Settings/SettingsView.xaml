@@ -1,0 +1,22 @@
+<UserControl x:Class="OpenAHU.Desktop.Features.Settings.SettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" FontSize="14" Background="White" Foreground="#202C34">
+    <UserControl.Resources><ResourceDictionary Source="/OpenAHU.Desktop.Features;component/Common/FeatureStyles.xaml" /></UserControl.Resources>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24">
+            <TextBlock Text="设置与本地服务" Style="{StaticResource PageTitle}" />
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource PageStatus}" />
+            <Border BorderBrush="#D7E1E7" BorderThickness="1" Padding="22" CornerRadius="8" Margin="0,6,0,18">
+                <StackPanel>
+                    <TextBlock Text="{Binding HealthText}" FontSize="20" Margin="0,0,0,14" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Health.Version, StringFormat=服务版本：{0}, TargetNullValue=尚未加载}" Margin="0,5" />
+                    <TextBlock Text="{Binding Status.Provider, StringFormat=数据来源：{0}, TargetNullValue=尚未加载}" Margin="0,5" />
+                    <TextBlock Text="{Binding Status.Message}" Margin="0,5" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="本机演示模式" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" />
+            <TextBlock Text="当前使用虚构本地资料，无需学校账号。课程维护入口位于课表页，保存后的内容由本地服务持久保存。" TextWrapping="Wrap" Margin="0,6" />
+            <TextBlock Text="如会话失效，请通过桌面主窗口重新连接本地服务，再点击刷新。" TextWrapping="Wrap" Margin="0,6" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
