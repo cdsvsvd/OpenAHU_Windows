@@ -1,0 +1,20 @@
+<UserControl x:Class="OpenAHU.Desktop.Features.Grades.GradesView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" FontSize="14" Background="White" Foreground="#202C34">
+    <UserControl.Resources><ResourceDictionary Source="/OpenAHU.Desktop.Features;component/Common/FeatureStyles.xaml" /></UserControl.Resources>
+    <Grid Margin="24">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <TextBlock Text="成绩" Style="{StaticResource PageTitle}" />
+        <ContentControl Grid.Row="1" Content="{Binding}" ContentTemplate="{StaticResource PageStatus}" />
+        <ContentControl Grid.Row="2" Content="{Binding}" ContentTemplate="{StaticResource TermSelector}" />
+        <DataGrid Grid.Row="3" ItemsSource="{Binding Items}" AutomationProperties.Name="本地演示成绩">
+            <DataGrid.Columns>
+                <DataGridTextColumn ElementStyle="{StaticResource CellText}" Header="课程" Binding="{Binding CourseName}" Width="2*" />
+                <DataGridTextColumn ElementStyle="{StaticResource CellText}" Header="学分" Binding="{Binding Credits}" Width="*" />
+                <DataGridTextColumn ElementStyle="{StaticResource CellText}" Header="分数" Binding="{Binding Score, TargetNullValue=未公布}" Width="*" />
+                <DataGridTextColumn ElementStyle="{StaticResource CellText}" Header="演示绩点" Binding="{Binding GradePoint, TargetNullValue=未公布}" Width="*" />
+            </DataGrid.Columns>
+        </DataGrid>
+        <TextBlock Grid.Row="4" Text="仅展示本地数据库记录的演示成绩与绩点，不推导官方 GPA。" TextWrapping="Wrap" Foreground="#52616B" Margin="0,14,0,0" />
+    </Grid>
+</UserControl>
