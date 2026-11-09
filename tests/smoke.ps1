@@ -29,8 +29,8 @@ function Stop-Api {
     $script:proc = $null
     # abnormal stop simulates stale handshake; next boot must safely replace it
 }
-function ExpectStatus($url,$headers,[int]$expect) {
-    try { Invoke-WebRequest -Uri $url -Headers $headers -UseBasicParsing | Out-Null; throw "Expected $expect, got 2xx" }
+function ExpectStatus($url,$headers,[int]$expect,[string]$method='GET') {
+    try { Invoke-WebRequest -Uri $url -Headers $headers -Method $method -UseBasicParsing | Out-Null; throw "Expected $expect, got 2xx" }
     catch {
         if(-not $_.Exception.Response) { throw }
         $status = [int]$_.Exception.Response.StatusCode
@@ -71,9 +71,46 @@ try {
         startSection=7;endSection=8;weekNumbers=@(1,3,5);termId='term-2026-fall' } | ConvertTo-Json -Depth 5 -Compress
     $updated = Invoke-RestMethod "$base/local/courses/$id" -Method PUT -Headers $h -ContentType 'application/json; charset=utf-8' -Body ([System.Text.Encoding]::UTF8.GetBytes($updatedBody))
     Assert ($updated.name -eq '已修改课程') 'course update failed'
+    # Member05: update the same record repeatedly with overlapping week keys.
+    $secondBody = @{ name='二次修改课程';teacher='测试教师';location='测试楼';dayOfWeek=5;
+        startSection=7;endSection=8;weekNumbers=@(1,5);termId='term-2026-fall' } | ConvertTo-Json -Depth 5 -Compress
+    $secondUpdate = Invoke-RestMethod "$base/local/courses/$id" -Method PUT -Headers $h -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($secondBody))
+    Assert ((@($secondUpdate.weekNumbers) -join ',') -eq '1,5') 'second update weeks differ'
+    $thirdBody = @{ name='三次修改课程';teacher='测试教师';location='测试楼';dayOfWeek=5;
+        startSection=7;endSection=8;weekNumbers=@(1,3,5);termId='term-2026-fall' } | ConvertTo-Json -Depth 5 -Compress
+    $thirdUpdate = Invoke-RestMethod "$base/local/courses/$id" -Method PUT -Headers $h -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($thirdBody))
+    Assert ((@($thirdUpdate.weekNumbers) -join ',') -eq '1,3,5') 'third update weeks differ'
+    $freshCourses = Invoke-RestMethod "$base/courses?termId=term-2026-fall" -Headers $h
+    $reloaded = @($freshCourses | Where-Object id -eq $id)
+    Assert ($reloaded.Count -eq 1) 'repeatedly updated course missing'
+    Assert ((@($reloaded[0].weekNumbers) -join ',') -eq '1,3,5') 'repeated update not persisted'
+    ExpectStatus "$base/local/courses/course-003" $h 404 'DELETE'
     Invoke-RestMethod "$base/local/courses/$id" -Method DELETE -Headers $h | Out-Null
     $coursesAfterDelete = Invoke-RestMethod "$base/courses?termId=term-2026-fall" -Headers $h
     Assert (($coursesAfterDelete | Where-Object id -eq $id).Count -eq 0) 'course delete failed'
+    Stop-Api
+    # Invalid active student must not report a healthy database.
+    $invalidActive = Join-Path $tmp 'invalid-active.db'
+    Copy-Item (Join-Path $tmp 'campus.db') $invalidActive
+    & python -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("UPDATE app_settings SET setting_value=? WHERE setting_key=?",("ghost-student","active_demo_student_id")); c.commit(); c.close()' $invalidActive
+    Assert ($LASTEXITCODE -eq 0) 'could not prepare invalid active student'
+    $env:OpenAHU__DatabasePath = $invalidActive
+    $s = Start-Api
+    $h = @{ 'X-OpenAHU-Session' = $s.token }; $base = $s.baseUrl + '/api/v1'
+    $invalidActiveHealth = Invoke-RestMethod "$base/health" -Headers $h
+    Assert (($invalidActiveHealth.status -eq 'degraded') -and (-not $invalidActiveHealth.databaseReady)) 'orphaned student incorrectly reported ready'
+    Stop-Api
+    # A schema with a broken foreign key must not be opened/migrated.
+    $invalidFk = Join-Path $tmp 'invalid-fk.db'
+    Copy-Item (Join-Path $tmp 'campus.db') $invalidFk
+    & python -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("PRAGMA foreign_keys=OFF"); c.execute("INSERT INTO course_weeks(course_id,week_number) VALUES (?,?)",("missing-course",1)); c.commit(); c.close()' $invalidFk
+    Assert ($LASTEXITCODE -eq 0) 'could not prepare invalid foreign key fixture'
+    $env:OpenAHU__DatabasePath = $invalidFk
+    $s = Start-Api
+    $h = @{ 'X-OpenAHU-Session' = $s.token }; $base = $s.baseUrl + '/api/v1'
+    $invalidFkHealth = Invoke-RestMethod "$base/health" -Headers $h
+    Assert (($invalidFkHealth.status -eq 'degraded') -and (-not $invalidFkHealth.databaseReady)) 'broken foreign key database incorrectly reported ready'
+    Stop-Api
     # Member 05 safety regression: unmanaged SQLite files must not be adopted or overwritten.
     Stop-Api
     $unmanaged = Join-Path $tmp 'unmanaged.db'
@@ -88,7 +125,7 @@ try {
     Stop-Api
     & python -c 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); assert db.execute("SELECT note FROM user_notes").fetchone()==("keep-this-row",); assert db.execute("SELECT name FROM sqlite_master WHERE name=?",("__EFMigrationsHistory",)).fetchone() is None; db.close()' $unmanaged
     Assert ($LASTEXITCODE -eq 0) 'unmanaged database was modified'
-    Write-Host 'PASS: health / session 401 / term 400&404 / read / CRUD / restart persistence / unmanaged database preservation'
+    Write-Host 'PASS: health / session 401 / term 400&404 / read / repeat update / CRUD / persistence / orphaned user / foreign key / unmanaged database'
 }
 catch {
     Write-Host ("Smoke test failure: " + $_.Exception.Message)
