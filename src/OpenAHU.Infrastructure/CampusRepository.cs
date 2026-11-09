@@ -22,6 +22,10 @@ public sealed class CampusRepository : ICampusRepository
         { throw Error(CampusErrorKind.Conflict, "数据约束冲突，请检查课程关联或输入内容。"); }
         catch (SqliteException e) when (e.SqliteErrorCode == 19)
         { throw Error(CampusErrorKind.Conflict, "数据约束冲突，请检查课程关联或输入内容。"); }
+        // Persisted date/time values are text in SQLite. Corrupt or imported malformed
+        // date strings must return the documented db_unavailable response, not HTTP 500.
+        catch (Exception e) when (e is FormatException or OverflowException)
+        { throw Error(CampusErrorKind.DbUnavailable, "本地数据库包含无效的日期或时间数据，请检查数据完整性。"); }
         catch (Exception e) when (e is DbUpdateException or SqliteException or InvalidOperationException or IOException or UnauthorizedAccessException)
         { throw Error(CampusErrorKind.DbUnavailable, "本地数据库暂时不可用，请稍后重试。"); }
     }
