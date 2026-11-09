@@ -47,7 +47,7 @@ public static class DemoDatabaseInitializer
             new Exam {Id="exam-002",CourseId="course-002",StartsAt="2026-12-23T14:00:00+08:00",EndsAt="2026-12-23T16:00:00+08:00",Location="演示楼D402"},
             new Exam {Id="exam-003",CourseId="course-003"});
         db.CampusLinks.AddRange(
-            new CampusLink {Id="link-001",Title="项目仓库",Url="https://github.com/cdsvsvd/-Windows-.git",Category="项目"},
+            new CampusLink {Id="link-001",Title="项目仓库",Url="https://github.com/cdsvsvd/OpenAHU_Windows",Category="项目"},
             new CampusLink {Id="link-002",Title="GitHub",Url="https://github.com/",Category="开发"});
         db.AppSettings.AddRange(
             new AppSetting {SettingKey="active_demo_student_id",SettingValue="demo-001"},

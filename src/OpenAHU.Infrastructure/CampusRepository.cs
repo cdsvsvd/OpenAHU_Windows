@@ -38,9 +38,13 @@ public sealed class CampusRepository : ICampusRepository
     {
         try
         {
+            // An orphaned active-student setting must not mark the store healthy.
             return await _db.Database.CanConnectAsync(ct)
-                && await _db.AppSettings.AnyAsync(x=>x.SettingKey=="active_demo_student_id",ct)
-                && await _db.Students.AnyAsync(ct);
+                && await (from setting in _db.AppSettings.AsNoTracking()
+                          join student in _db.Students.AsNoTracking()
+                            on setting.SettingValue equals student.Id
+                          where setting.SettingKey=="active_demo_student_id"
+                          select student.Id).AnyAsync(ct);
         }
         catch (Exception e) when (e is SqliteException or DbUpdateException or InvalidOperationException)
         { return false; }
@@ -144,6 +148,9 @@ public sealed class CampusRepository : ICampusRepository
 
     private async Task<Course> RequireOwnCourseAsync(string sid,string id,CancellationToken ct)
     {
+        // /local/courses is only permitted to mutate user-created local records.
+        if (!id.StartsWith("local-",StringComparison.Ordinal))
+            throw Error(CampusErrorKind.NotFound,"未找到可修改的本地课程。");
         var course=await _db.Courses.Include(x=>x.Weeks).Include(x=>x.Enrollments)
             .FirstOrDefaultAsync(x=>x.Id==id && x.Enrollments.Any(e=>e.StudentId==sid),ct);
         if (course is null) throw Error(CampusErrorKind.NotFound,"未找到本机演示资料中的该课程。");
@@ -164,10 +171,15 @@ public sealed class CampusRepository : ICampusRepository
         c.TermId=r.TermId;c.Name=r.Name.Trim();c.Teacher=r.Teacher.Trim();c.Location=r.Location.Trim();
         c.DayOfWeek=r.DayOfWeek==DayOfWeek.Sunday?7:(int)r.DayOfWeek;
         c.StartSection=r.StartSection;c.EndSection=r.EndSection;
-        var wanted=r.WeekNumbers.ToHashSet();
-        foreach(var week in c.Weeks.Where(x=>!wanted.Contains(x.WeekNumber)).ToArray()) _db.CourseWeeks.Remove(week);
-        var existing=c.Weeks.Select(x=>x.WeekNumber).ToHashSet();
-        foreach(var week in wanted.Where(x=>!existing.Contains(x))) c.Weeks.Add(new CourseWeek {CourseId=id,WeekNumber=week});
+        // Replacing the aggregate as one unit avoids EF tracking collisions on
+        // repeated edits with overlapping week keys in the same scope.
+        var wanted=r.WeekNumbers.OrderBy(w=>w).ToArray();
+        foreach(var trackedWeek in c.Weeks.ToArray())
+            _db.Entry(trackedWeek).State=EntityState.Detached;
+        c.Weeks.Clear();
+        await _db.CourseWeeks.Where(w=>w.CourseId==id).ExecuteDeleteAsync(ct);
+        foreach(var week in wanted)
+            c.Weeks.Add(new CourseWeek {CourseId=id,WeekNumber=week});
         await _db.SaveChangesAsync(ct);
         await trx.CommitAsync(ct);
         return Map(c);
@@ -183,9 +195,22 @@ public sealed class CampusRepository : ICampusRepository
             await _db.Exams.AnyAsync(x=>x.CourseId==id,ct))
             throw Error(CampusErrorKind.Conflict,"该课程仍有成绩或考试记录，请先处理关联记录。");
         await using var trx=await _db.Database.BeginTransactionAsync(ct);
-        _db.Courses.Remove(course);
-        await _db.SaveChangesAsync(ct);
+        // Atomic predicate protects newly added grades/exams or enrollments
+        // between the application's precheck and the actual DELETE statement.
+        var affected=await _db.Courses.Where(c=>c.Id==id
+            && c.Enrollments.Any(e=>e.StudentId==sid)
+            && !c.Enrollments.Any(e=>e.StudentId!=sid)
+            && !_db.Grades.Any(g=>g.CourseId==c.Id)
+            && !_db.Exams.Any(e=>e.CourseId==c.Id))
+            .ExecuteDeleteAsync(ct);
+        if (affected!=1)
+        {
+            if (await _db.Courses.AsNoTracking().AnyAsync(c=>c.Id==id,ct))
+                throw Error(CampusErrorKind.Conflict,"课程关联数据已变化，已取消删除，请刷新后重试。");
+            throw Error(CampusErrorKind.NotFound,"课程已不存在，请刷新后重试。");
+        }
         await trx.CommitAsync(ct);
+        _db.ChangeTracker.Clear(); // ExecuteDelete bypasses the change tracker.
         return true;
         });
     }

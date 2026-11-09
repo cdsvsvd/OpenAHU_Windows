@@ -62,5 +62,21 @@ public static class DatabaseCompatibilityGuard
             throw new InvalidOperationException("数据库内已有业务表但缺少迁移版本记录，拒绝自动修改。");
         if (applied.Count > 0 && !RequiredTables.IsSubsetOf(tables))
             throw new InvalidOperationException("数据库迁移历史存在但业务表不完整，请人工核对备份。");
+
+        // Existing managed databases are checked read-only before migration.
+        await using (var quickCheck=connection.CreateCommand())
+        {
+            quickCheck.CommandText="PRAGMA quick_check";
+            var value=await quickCheck.ExecuteScalarAsync(cancellationToken);
+            if (!string.Equals(value as string,"ok",StringComparison.Ordinal))
+                throw new InvalidOperationException("SQLite完整性检查未通过，拒绝迁移。");
+        }
+        await using (var foreignKeys=connection.CreateCommand())
+        {
+            foreignKeys.CommandText="PRAGMA foreign_key_check";
+            await using var reader=await foreignKeys.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+                throw new InvalidOperationException("SQLite外键检查未通过，拒绝迁移。");
+        }
     }
 }
