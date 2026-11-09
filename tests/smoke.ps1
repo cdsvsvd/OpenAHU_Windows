@@ -37,10 +37,10 @@ function ExpectStatus($url,$headers,[int]$expect,[string]$method='GET') {
         Assert ($status -eq $expect) "Expected HTTP $expect, got $status"
     }
 }
-function ExpectCourseRejection($url,$headers,$draft,[int]$expectedStatus,[string]$expectedCode,[string]$field='') {
+function ExpectCourseRejection($url,$headers,$draft,[int]$expectedStatus,[string]$expectedCode,[string]$field='',[string]$method='POST') {
     $body=$draft | ConvertTo-Json -Depth 6 -Compress
     try {
-        Invoke-RestMethod $url -Method POST -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body)) | Out-Null
+        Invoke-RestMethod $url -Method $method -Headers $headers -ContentType 'application/json; charset=utf-8' -Body ([Text.Encoding]::UTF8.GetBytes($body)) | Out-Null
         throw "Expected HTTP $expectedStatus for rejected course"
     }
     catch {
@@ -74,10 +74,23 @@ try {
     Assert ($coursesBefore.Count -ge 3) 'demo courses not returned'
     $grades = Invoke-RestMethod "$base/grades?termId=term-2026-fall" -Headers $h
     Assert ($grades.Count -ge 3) 'demo grades not returned'
+    # Member04: an unpublished grade is null, never 0; no fabricated GPA.
+    $unpublished=@($grades | Where-Object courseId -eq 'course-003')
+    Assert ($unpublished.Count -eq 1) 'missing unpublished grade fixture'
+    Assert ($null -eq $unpublished[0].score) 'unpublished score became 0'
+    Assert ($null -eq $unpublished[0].gradePoint) 'unpublished GPA was fabricated'
+    $exams=Invoke-RestMethod "$base/exams?termId=term-2026-fall" -Headers $h
+    Assert ($exams.Count -ge 3) 'exam fixture missing'
+    Assert ($null -eq $exams[-1].startsAt) 'unscheduled exam must be last'
+    Assert ($null -eq $exams[-1].endsAt) 'unscheduled exam end should be null'
     # Member04 regression matrix: bad fields, nonexistent term, time clash; no record
     # should be persisted by any of these rejected POST requests.
     $newCourse = @{ name='表单检验';teacher='';location='';dayOfWeek=5;
         startSection=7;endSection=8;weekNumbers=@(1,3,5);termId='term-2026-fall' }
+    # Member04 proposed editing shared course rows across users. The current
+    # /local/courses API must reject all seeded/shared course modifications.
+    ExpectCourseRejection "$base/local/courses/course-001" $h $newCourse 404 'not_found' '' 'PUT'
+    ExpectStatus "$base/local/courses/course-001" $h 404 'DELETE'
     $badName=$newCourse.Clone();$badName.name='   '
     ExpectCourseRejection "$base/local/courses" $h $badName 400 'invalid_request' 'name'
     $badTeacher=$newCourse.Clone();$badTeacher.teacher=('师'*101)
@@ -154,6 +167,28 @@ try {
     $invalidFkHealth = Invoke-RestMethod "$base/health" -Headers $h
     Assert (($invalidFkHealth.status -eq 'degraded') -and (-not $invalidFkHealth.databaseReady)) 'broken foreign key database incorrectly reported ready'
     Stop-Api
+    # Malformed persisted date/time strings should not escape as generic 500 errors.
+    $badTermDatabase=Join-Path $tmp 'invalid-date.db'
+    & python -c 'import sqlite3,sys; a=sqlite3.connect(sys.argv[1]); b=sqlite3.connect(sys.argv[2]); a.backup(b); b.close(); a.close()' (Join-Path $tmp 'campus.db') $badTermDatabase
+    Assert ($LASTEXITCODE -eq 0) 'unable to prepare date fixture'
+    & python -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("UPDATE terms SET start_date = ? WHERE id = ?",("bad-date","term-2026-fall")); c.commit(); c.close()' $badTermDatabase
+    Assert ($LASTEXITCODE -eq 0) 'unable to invalidate term date'
+    $env:OpenAHU__DatabasePath=$badTermDatabase
+    $s=Start-Api
+    $h=@{ 'X-OpenAHU-Session' = $s.token };$base=$s.baseUrl+'/api/v1'
+    ExpectStatus "$base/terms" $h 503
+    Stop-Api
+
+    $badExamDatabase=Join-Path $tmp 'invalid-exam.db'
+    & python -c 'import sqlite3,sys; a=sqlite3.connect(sys.argv[1]); b=sqlite3.connect(sys.argv[2]); a.backup(b); b.close(); a.close()' (Join-Path $tmp 'campus.db') $badExamDatabase
+    Assert ($LASTEXITCODE -eq 0) 'unable to prepare exam fixture'
+    & python -c 'import sqlite3,sys; c=sqlite3.connect(sys.argv[1]); c.execute("UPDATE exams SET starts_at=?, ends_at=? WHERE id=?",("invalid","invalid-z","exam-001")); c.commit(); c.close()' $badExamDatabase
+    Assert ($LASTEXITCODE -eq 0) 'unable to invalidate exam time'
+    $env:OpenAHU__DatabasePath=$badExamDatabase
+    $s=Start-Api
+    $h=@{ 'X-OpenAHU-Session' = $s.token };$base=$s.baseUrl+'/api/v1'
+    ExpectStatus "$base/exams?termId=term-2026-fall" $h 503
+    Stop-Api
     # Member 05 safety regression: unmanaged SQLite files must not be adopted or overwritten.
     Stop-Api
     $unmanaged = Join-Path $tmp 'unmanaged.db'
@@ -168,7 +203,7 @@ try {
     Stop-Api
     & python -c 'import sqlite3,sys; db=sqlite3.connect(sys.argv[1]); assert db.execute("SELECT note FROM user_notes").fetchone()==("keep-this-row",); assert db.execute("SELECT name FROM sqlite_master WHERE name=?",("__EFMigrationsHistory",)).fetchone() is None; db.close()' $unmanaged
     Assert ($LASTEXITCODE -eq 0) 'unmanaged database was modified'
-    Write-Host 'PASS: health / session 401 / validation 400&404&409 / read / repeat update / CRUD / persistence / orphaned user / foreign key / unmanaged database'
+    Write-Host 'PASS: health / session / validation / unpublished grades / exam sorting / shared-course rejection / invalid dates / CRUD / persistence / DB guards'
 }
 catch {
     Write-Host ("Smoke test failure: " + $_.Exception.Message)
