@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using OpenAHU.Application;
 using OpenAHU.Contracts.Dtos;
@@ -22,11 +23,15 @@ public sealed class CampusRepository : ICampusRepository
         { throw Error(CampusErrorKind.Conflict, "数据约束冲突，请检查课程关联或输入内容。"); }
         catch (SqliteException e) when (e.SqliteErrorCode == 19)
         { throw Error(CampusErrorKind.Conflict, "数据约束冲突，请检查课程关联或输入内容。"); }
+        catch (DbUpdateException e) when (e.InnerException is SqlException sql && sql.Number is 2627 or 2601 or 547)
+        { throw Error(CampusErrorKind.Conflict, "SQL Server数据约束冲突，请检查课程关联或输入。"); }
+        catch (SqlException e) when (e.Number is 2627 or 2601 or 547)
+        { throw Error(CampusErrorKind.Conflict, "SQL Server数据约束冲突，请检查课程关联或输入。"); }
         // Persisted date/time values are text in SQLite. Corrupt or imported malformed
         // date strings must return the documented db_unavailable response, not HTTP 500.
         catch (Exception e) when (e is FormatException or OverflowException)
         { throw Error(CampusErrorKind.DbUnavailable, "本地数据库包含无效的日期或时间数据，请检查数据完整性。"); }
-        catch (Exception e) when (e is DbUpdateException or SqliteException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        catch (Exception e) when (e is DbUpdateException or SqliteException or SqlException or InvalidOperationException or IOException or UnauthorizedAccessException)
         { throw Error(CampusErrorKind.DbUnavailable, "本地数据库暂时不可用，请稍后重试。"); }
     }
     private async Task<string> ActiveStudentAsync(CancellationToken ct)
@@ -50,7 +55,7 @@ public sealed class CampusRepository : ICampusRepository
                           where setting.SettingKey=="active_demo_student_id"
                           select student.Id).AnyAsync(ct);
         }
-        catch (Exception e) when (e is SqliteException or DbUpdateException or InvalidOperationException)
+        catch (Exception e) when (e is SqliteException or SqlException or DbUpdateException or InvalidOperationException)
         { return false; }
     }
 

@@ -68,9 +68,9 @@ public sealed class CampusDbContext : DbContext
             e.ToTable("grades"); e.HasKey(x=>new{x.StudentId,x.CourseId});
             e.Property(x=>x.StudentId).HasColumnName("student_id");
             e.Property(x=>x.CourseId).HasColumnName("course_id");
-            e.Property(x=>x.Credits).HasColumnName("credits").HasColumnType("REAL");
-            e.Property(x=>x.Score).HasColumnName("score").HasColumnType("REAL");
-            e.Property(x=>x.GradePoint).HasColumnName("grade_point").HasColumnType("REAL");
+            e.Property(x=>x.Credits).HasColumnName("credits").HasColumnType(Database.IsSqlServer()?"float":"REAL");
+            e.Property(x=>x.Score).HasColumnName("score").HasColumnType(Database.IsSqlServer()?"float":"REAL");
+            e.Property(x=>x.GradePoint).HasColumnName("grade_point").HasColumnType(Database.IsSqlServer()?"float":"REAL");
             e.HasOne<Enrollment>().WithOne().HasForeignKey<Grade>(x=>new{x.StudentId,x.CourseId}).OnDelete(DeleteBehavior.Cascade);
             e.ToTable(t=>t.HasCheckConstraint("ck_grades_range", "credits BETWEEN 0 AND 50 AND (score IS NULL OR score BETWEEN 0 AND 100) AND (grade_point IS NULL OR grade_point BETWEEN 0 AND 5)"));
         });

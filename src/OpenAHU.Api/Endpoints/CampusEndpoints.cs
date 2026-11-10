@@ -1,6 +1,7 @@
 using System.Text.Json;
 using OpenAHU.Api.Errors;
 using OpenAHU.Infrastructure;
+using OpenAHU.Infrastructure;
 using OpenAHU.Application;
 using OpenAHU.Contracts.Dtos;
 using OpenAHU.Contracts.Errors;
@@ -23,8 +24,9 @@ public static class CampusEndpoints
             var ready=startup.IsReady && await repo.IsReadyAsync(context.RequestAborted);
             return Results.Ok(new HealthDto(ready?"ok":"degraded",ready,ApiVersion));
         });
-        group.MapGet("/data-status",()=>Results.Ok(new DataStatusDto(
-            Provider:"LocalSQLite",IsDemo:true,UpdatedAt:null,Message:"本地演示数据，非学校官方信息")));
+        group.MapGet("/data-status",(IConfiguration configuration)=>Results.Ok(new DataStatusDto(
+            Provider:InfrastructureOptions.DatabaseProvider(configuration)=="SqlServer"?"LocalSqlServer":"LocalSQLite",
+            IsDemo:true,UpdatedAt:null,Message:"本地演示数据，非学校官方信息")));
 
         group.MapGet("/profile",async (ICampusService service,HttpContext context) =>
             Results.Ok(await service.GetProfileAsync(context.RequestAborted)));
