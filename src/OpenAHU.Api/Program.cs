@@ -62,15 +62,19 @@ try
 {
     using var scope=app.Services.CreateScope();
     var db=scope.ServiceProvider.GetRequiredService<CampusDbContext>();
-    await DatabaseCompatibilityGuard.AssertCompatibleAsync(
-        db, InfrastructureOptions.DatabasePath(app.Configuration), CancellationToken.None);
+    if (db.Database.ProviderName == "Microsoft.EntityFrameworkCore.SqlServer")
+        await SqlServerDatabaseGuard.AssertReadyAsync(db, CancellationToken.None);
+    else
+        await DatabaseCompatibilityGuard.AssertCompatibleAsync(
+            db, InfrastructureOptions.DatabasePath(app.Configuration), CancellationToken.None);
     await DemoDatabaseInitializer.InitializeAsync(db,CancellationToken.None);
     databaseStartupState.IsReady = true;
-    app.Logger.LogInformation("本地SQLite已完成首次迁移与演示资料检查。");
+    app.Logger.LogInformation("本地数据库 {Provider} 已完成结构与演示数据检查。",
+        InfrastructureOptions.DatabaseProvider(app.Configuration));
 }
 catch(Exception e)
 {
-    app.Logger.LogError(e,"SQLite初始化失败：API仍可启动，但/health将报告降级。");
+    app.Logger.LogError(e,"数据库初始化失败：API仍可启动，但/health将报告降级。");
 }
 await app.StartAsync();
 SessionHandshake.Write(handshakePath,SessionHandshake.Create(app.Urls,sessionToken.Value,Environment.ProcessId));

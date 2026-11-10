@@ -7,7 +7,10 @@ public static class DemoDatabaseInitializer
 {
     public static async Task InitializeAsync(CampusDbContext db, CancellationToken ct)
     {
-        await db.Database.MigrateAsync(ct);
+        if (db.Database.IsSqlite())
+            await db.Database.MigrateAsync(ct);
+        // SQL Server schema is provisioned explicitly by sqlserver/01_Create_CampusDemo.sql.
+        // Never run the SQLite-only initial migration against SQL Server.
         // Do not restore deliberately deleted demo records or overwrite partly filled databases.
         // The marker and the demo records are written in the same transaction below.
         if (await db.AppSettings.AnyAsync(x => x.SettingKey == "demo_seed_version", ct)) return;
@@ -51,7 +54,7 @@ public static class DemoDatabaseInitializer
             new CampusLink {Id="link-002",Title="GitHub",Url="https://github.com/",Category="开发"});
         db.AppSettings.AddRange(
             new AppSetting {SettingKey="active_demo_student_id",SettingValue="demo-001"},
-            new AppSetting {SettingKey="source",SettingValue="LocalSQLiteDemo"},
+            new AppSetting {SettingKey="source",SettingValue=db.Database.IsSqlServer()?"LocalSqlServerDemo":"LocalSQLiteDemo"},
             new AppSetting {SettingKey="source_label",SettingValue="本地演示数据，非学校官方信息"},
             new AppSetting {SettingKey="demo_seed_version",SettingValue="v1"});
         await db.SaveChangesAsync(ct);

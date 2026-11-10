@@ -1,0 +1,38 @@
+name: OpenAHU Windows EXE Package
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Create self-contained Windows EXE package
+        shell: pwsh
+        run: ./tools/publish-windows.ps1
+      - name: Verify package contents
+        shell: pwsh
+        run: |
+          $zip = "artifacts/OpenAHU-win-x64.zip"
+          if (-not (Test-Path $zip)) { throw "Release archive missing" }
+          Add-Type -AssemblyName System.IO.Compression
+          $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path $zip))
+          try {
+            $names = @($archive.Entries | ForEach-Object { $_.FullName })
+            if ('OpenAHU.Desktop.exe' -notin $names -or 'OpenAHU.Api.exe' -notin $names) {
+              throw "EXE files missing from zip"
+            }
+          } finally { $archive.Dispose() }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OpenAHU-win-x64
+          path: artifacts/OpenAHU-win-x64.zip
+          if-no-files-found: error
+          retention-days: 30
