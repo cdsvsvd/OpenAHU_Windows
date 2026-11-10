@@ -61,22 +61,30 @@ public sealed class ShellViewModel : ObservableObject
         StartupError = "正在启动本地服务，请稍候。";
         try
         {
-            await DisposePagesAsync().ConfigureAwait(true);
+            DisposePages();
             _api?.Dispose();
             _api = await _backend.StartAsync().ConfigureAwait(true);
-            var health = await _api.GetHealthAsync(CancellationToken.None).ConfigureAwait(true);
-            if (!health.DatabaseReady)
+            var healthTask = _api.GetHealthAsync(CancellationToken.None);
+            var statusTask = _api.GetDataStatusAsync(CancellationToken.None);
+            await Task.WhenAll(healthTask, statusTask).ConfigureAwait(true);
+            var health = await healthTask;
+            var status = await statusTask;
+            var source = status.Provider switch
             {
-                throw new InvalidOperationException("本地服务已启动，但 SQLite 数据库尚未就绪。");
-            }
+                "LocalSqlServer" => "SQL Server",
+                "LocalSQLite" => "SQLite",
+                _ => status.Provider
+            };
+            if (!health.DatabaseReady)
+                throw new InvalidOperationException($"{source}数据库尚未就绪，请检查本地数据库连接配置。");
             _pages = FeatureCatalog.Create(_api);
             NavigationItems.Clear();
             foreach (var page in _pages) NavigationItems.Add(new NavigationItem(page.Key, page.Title, page));
             CurrentPage = _pages.FirstOrDefault();
             ServiceStatus = "已连接";
-            DatabaseStatus = "数据库：SQLite 已就绪";
-            ServiceMessage = "本地服务已就绪，所有数据来自本机 SQLite 演示库。";
-            DataSourceLabel = "数据来源：LocalSQLite · 演示数据";
+            DatabaseStatus = $"数据库：{source} 已就绪";
+            ServiceMessage = $"本地服务已就绪，当前使用{source}演示数据。";
+            DataSourceLabel = $"数据来源：{status.Provider} · 演示数据";
             StartupError = "";
             if (CurrentPage is not null) await CurrentPage.ActivateAsync().ConfigureAwait(true);
         }
@@ -87,14 +95,14 @@ public sealed class ShellViewModel : ObservableObject
             ServiceStatus = "未连接";
             DatabaseStatus = "数据库：不可用";
             ServiceMessage = "本地服务未就绪，请稍后重试。";
-            StartupError = PageViewModel.ErrorText(ex);
+            StartupError = ex is InvalidOperationException ? ex.Message : PageViewModel.ErrorText(ex);
         }
         finally { IsConnecting = false; }
     }
 
     private async Task NavigateAsync(FeaturePage page)
     {
-        if (IsConnecting || !_pages.Contains(page)) return;
+        if (IsConnecting || !_pages.Contains(page) || ReferenceEquals(CurrentPage, page)) return;
         CurrentPage = page;
         try
         {
@@ -119,18 +127,17 @@ public sealed class ShellViewModel : ObservableObject
 
     public async Task ShutdownAsync()
     {
-        await DisposePagesAsync().ConfigureAwait(false);
+        DisposePages();
         _api?.Dispose();
         await _backend.DisposeAsync().ConfigureAwait(false);
     }
 
-    private Task DisposePagesAsync()
+    private void DisposePages()
     {
         foreach (var page in _pages) page.Dispose();
         _pages = [];
         NavigationItems.Clear();
         CurrentPage = null;
-        return Task.CompletedTask;
     }
 
     private sealed class DelegateCommand(Action<object?> execute, Predicate<object?> canExecute) : ICommand

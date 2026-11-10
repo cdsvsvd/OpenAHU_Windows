@@ -18,34 +18,40 @@ public abstract class TermPageViewModel(IFeatureApi api) : PageViewModel(api)
             if (_updatingTerms) return;
             if (!Set(ref _term, value)) return;
             TermChanged();
-            _ = RefreshAsync(); // RunAsync observes failures and cancels superseded requests.
+            // Switching the selected term only reloads that term's rows.
+            // The term list is fetched again only by the explicit Refresh command.
+            _ = RunAsync(LoadCurrentTermAsync);
         }
     }
     protected virtual void TermChanged() { }
     protected abstract void ClearRows();
     protected abstract Task LoadTermAsync(TermDto term, CancellationToken ct);
 
-    public override Task RefreshAsync()
+    public override Task RefreshAsync() => RunAsync(async ct =>
     {
-        var selectedId = SelectedTerm?.Id;
-        return RunAsync(async ct =>
+        var selectedId = _term?.Id;
+        var terms = await Api.GetTermsAsync(ct);
+        ct.ThrowIfCancellationRequested();
+        var chosen = terms.FirstOrDefault(t => t.Id == selectedId)
+            ?? terms.FirstOrDefault(t => t.IsCurrent) ?? terms.FirstOrDefault();
+        var changed = _term?.Id != chosen?.Id;
+        _updatingTerms = true;
+        try
         {
-            ClearRows();
-            var terms = await Api.GetTermsAsync(ct);
-            ct.ThrowIfCancellationRequested();
-            var chosen = terms.FirstOrDefault(t => t.Id == selectedId) ?? terms.FirstOrDefault(t => t.IsCurrent) ?? terms.FirstOrDefault();
-            var changed = _term?.Id != chosen?.Id;
-            _updatingTerms = true;
-            try
-            {
-                Terms = terms;
-                _term = chosen;
-                Changed(nameof(SelectedTerm));
-            }
-            finally { _updatingTerms = false; }
-            if (changed) TermChanged();
-            if (chosen is null) { Notice = "暂无学期数据。"; return; }
-            await LoadTermAsync(chosen, ct);
-        });
+            Terms = terms;
+            _term = chosen;
+            Changed(nameof(SelectedTerm));
+        }
+        finally { _updatingTerms = false; }
+        if (changed) TermChanged();
+        await LoadCurrentTermAsync(ct);
+    });
+
+    private async Task LoadCurrentTermAsync(CancellationToken ct)
+    {
+        ClearRows();
+        var term = _term;
+        if (term is null) { Notice = "暂无学期数据。"; return; }
+        await LoadTermAsync(term, ct);
     }
 }
