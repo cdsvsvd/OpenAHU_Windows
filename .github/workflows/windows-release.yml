@@ -14,6 +14,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Frontend view-model behavior regressions
+        shell: pwsh
+        run: dotnet run --project src/OpenAHU.Desktop/Features/Verification/OpenAHU.Features.Verification.csproj -c Release -- --behavior
       - name: Create self-contained Windows EXE package
         shell: pwsh
         run: ./tools/publish-windows.ps1

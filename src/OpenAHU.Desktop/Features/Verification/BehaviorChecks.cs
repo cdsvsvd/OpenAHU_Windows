@@ -79,6 +79,17 @@ internal static class BehaviorChecks
         using var grades = new GradesViewModel(api);
         await grades.RefreshAsync();
         Check(grades.Items.Single().Score is null && grades.Items.Single().GradePoint is null, "null grades remain null (no GPA computation)");
+        // Term switching must not reload the unchanged list of terms.
+        api.Terms = [api.Terms[0], new TermDto("second-term", "第二虚构学期", DateOnly.FromDateTime(DateTime.Today), 16, false)];
+        await grades.RefreshAsync();
+        var termRequests = api.TermRequests;
+        grades.SelectedTerm = grades.Terms[1];
+        await Task.Yield();
+        Check(api.TermRequests == termRequests && grades.SelectedTerm?.Id == "second-term",
+            "term selection fetches only selected term rows, not the term list");
+        await grades.RefreshAsync();
+        Check(api.TermRequests == termRequests + 1,
+            "manual refresh re-queries the term list");
         api.GradesLoader = (_, _) => Task.FromResult(Array.Empty<GradeDto>());
         await grades.RefreshAsync();
         Check(grades.Notice.Contains("暂无成绩"), "empty grades status");
@@ -164,11 +175,12 @@ internal sealed class FakeApi : IFeatureApi
     public int CreateCalls;
     public int UpdateCalls;
     public bool Ready = true;
+    public int TermRequests;
     public Func<string, CancellationToken, Task<GradeDto[]>> GradesLoader = (id, _) => Task.FromResult(new[] { new GradeDto("g", "虚构未公布成绩", 2, null, null, id) });
     public Task<StudentProfileDto> GetProfileAsync(CancellationToken ct) => Task.FromResult(new StudentProfileDto("demo-fixture", "虚构验收学生", "演示学院", "演示专业", 2026, true));
     public Task<DataStatusDto> GetDataStatusAsync(CancellationToken ct) => Task.FromResult(new DataStatusDto("LocalSQLite", true, null, "本地演示数据，非学校官方信息"));
     public Task<HealthDto> GetHealthAsync(CancellationToken ct) => Task.FromResult(new HealthDto(Ready ? "ok" : "degraded", Ready, "verification"));
-    public Task<TermDto[]> GetTermsAsync(CancellationToken ct) => Task.FromResult(Terms);
+    public Task<TermDto[]> GetTermsAsync(CancellationToken ct) { TermRequests++; return Task.FromResult(Terms); }
     public Task<CourseDto[]> GetCoursesAsync(string termId, CancellationToken ct) => ReadFailure is null ? Task.FromResult(_courses.Where(c => c.TermId == termId).ToArray()) : Task.FromException<CourseDto[]>(ReadFailure);
     public Task<GradeDto[]> GetGradesAsync(string termId, CancellationToken ct) => GradesLoader(termId, ct);
     public Task<ExamDto[]> GetExamsAsync(string termId, CancellationToken ct) => Task.FromResult(new[] {

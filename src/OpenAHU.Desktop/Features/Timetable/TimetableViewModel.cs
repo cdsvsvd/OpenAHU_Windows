@@ -17,7 +17,7 @@ public sealed record CourseRow(CourseDto Data)
 
 public sealed class TimetableViewModel : TermPageViewModel
 {
-    private CourseDto[] _courses = [];
+    private CourseRow[] _rows = [];
     private CourseRow[] _items = [];
     private CourseRow? _selectedCourse;
     private CourseEditorViewModel? _editor;
@@ -33,7 +33,7 @@ public sealed class TimetableViewModel : TermPageViewModel
         SaveCommand = new(SaveAsync, ShowError, () => IsIdle && Editor is not null);
     }
     public CourseRow[] Items { get => _items; private set => Set(ref _items, value); }
-    public CourseRow? SelectedCourse { get => _selectedCourse; set { Set(ref _selectedCourse, value); CommandManager.InvalidateRequerySuggested(); } }
+    public CourseRow? SelectedCourse { get => _selectedCourse; set { if (Set(ref _selectedCourse, value)) CommandManager.InvalidateRequerySuggested(); } }
     public CourseEditorViewModel? Editor
     {
         get => _editor;
@@ -60,12 +60,12 @@ public sealed class TimetableViewModel : TermPageViewModel
         Changed(nameof(Weeks));
         Changed(nameof(SelectedWeek));
     }
-    protected override void ClearRows() { _hasLoaded = false; _courses = []; Items = []; SelectedCourse = null; }
+    protected override void ClearRows() { _hasLoaded = false; _rows = []; Items = []; SelectedCourse = null; }
     protected override async Task LoadTermAsync(TermDto term, CancellationToken ct)
     {
         var items = await Api.GetCoursesAsync(term.Id, ct);
         ct.ThrowIfCancellationRequested();
-        _courses = items;
+        _rows = items.Select(course => new CourseRow(course)).ToArray();
         _hasLoaded = true;
         Changed(nameof(Weeks));
         if (_week > term.WeekCount) SelectedWeek = term.WeekCount;
@@ -73,10 +73,11 @@ public sealed class TimetableViewModel : TermPageViewModel
     }
     private void Filter()
     {
-        Items = _courses.Where(c => ShowAllWeeks || c.WeekNumbers.Contains(SelectedWeek))
-            .OrderBy(c => ((int)c.DayOfWeek + 6) % 7).ThenBy(c => c.StartSection).ThenBy(c => c.Name)
-            .Select(c => new CourseRow(c)).ToArray();
-        SelectedCourse = null;
+        var selectedId = SelectedCourse?.Data.Id;
+        Items = _rows.Where(r => ShowAllWeeks || r.Data.WeekNumbers.Contains(SelectedWeek))
+            .OrderBy(r => ((int)r.Data.DayOfWeek + 6) % 7)
+            .ThenBy(r => r.Data.StartSection).ThenBy(r => r.Data.Name).ToArray();
+        SelectedCourse = Items.FirstOrDefault(r => r.Data.Id == selectedId);
         Notice = _hasLoaded && Items.Length == 0 ? (ShowAllWeeks ? "本学期暂无课程，可新增本地课程。" : "本周暂无课程，可切换周次或查看全部课程。") : "";
     }
     public void BeginNew()
